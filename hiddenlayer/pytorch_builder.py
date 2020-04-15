@@ -12,6 +12,7 @@ import re
 from .graph import Graph, Node
 from . import transforms as ht
 import torch
+from collections import abc
 
 # PyTorch Graph Transforms
 FRAMEWORK_TRANSFORMS = [
@@ -64,7 +65,15 @@ def get_shape(torch_node):
 
 
 def import_graph(hl_graph, model, args, input_names=None, verbose=False):
-    # TODO: add input names to graph
+
+    if args is None:
+        args = [1, 3, 224, 224] # assume ImageNet default
+
+    # if args is not Tensor but is array like then convert it to torch tensor
+    if not isinstance(args, torch.Tensor) and \
+        hasattr(args, "__len__") and hasattr(args, '__getitem__') and \
+        not isinstance(args, (str, abc.ByteString)):
+        args = torch.ones(args)
 
     # Run the Pytorch graph to get a trace and generate a graph from it    
     # Adapted from distiller SummaryGraph
@@ -96,14 +105,14 @@ def import_graph(hl_graph, model, args, input_names=None, verbose=False):
         # Op
         op = torch_node.kind()
         # Parameters
-        params = {k: torch_node[k] for k in torch_node.attributeNames()} 
+        params = {k: torch_node[k] for k in torch_node.attributeNames()}
         # Inputs/outputs
         # TODO: inputs = [i.unique() for i in node.inputs()]
         outputs = [o.unique() for o in torch_node.outputs()]
         # Get output shape
         shape = get_shape(torch_node)
         # Add HL node
-        hl_node = Node(uid=pytorch_id(torch_node), name=None, op=op, 
+        hl_node = Node(uid=pytorch_id(torch_node), name=None, op=op,
                        output_shape=shape, params=params)
         hl_graph.add_node(hl_node)
         # Add edges
