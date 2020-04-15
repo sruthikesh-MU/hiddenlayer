@@ -42,7 +42,7 @@ def pytorch_id(node):
     """Returns a unique ID for a node."""
     # After ONNX simplification, the scopeName is not unique anymore
     # so append node outputs to guarantee uniqueness
-    return node.scopeName() + "/outputs/" + "/".join([o.uniqueName() for o in node.outputs()])
+    return node.scopeName() + "/outputs/" + "/".join([o.debugName() for o in node.outputs()])
 
 
 def get_shape(torch_node):
@@ -70,6 +70,26 @@ def import_graph(hl_graph, model, args, input_names=None, verbose=False):
     trace, out = torch.jit.get_trace_graph(model, args)
     torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
     torch_graph = trace.graph()
+    
+    # Adapted from distiller SummaryGraph
+    with torch.onnx.set_training(model, False):
+
+        if hasattr(torch.jit, 'get_trace_graph'):  # torch 1.1.0 or before
+            trace, _ = torch.jit.get_trace_graph(model, args, _force_outplace=True)
+            graph = trace.graph()
+            nodes = graph.nodes()
+        elif hasattr(torch.jit, '_get_trace_graph'):
+            trace, _ = torch.jit._get_trace_graph(model, args, _force_outplace=True)
+            graph = trace
+            nodes = graph.nodes()
+        else:
+            raise RuntimeError(
+                'torch version {} has internal changes that are not supported yet'.format(torch.__version__))
+
+        # Let ONNX do the heavy lifting: fusing the convolution nodes; fusing the nodes
+        # composing a GEMM operation; etc.
+        torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
+        torch_graph = graph
 
     # Dump list of nodes (DEBUG only)
     if verbose:
