@@ -66,11 +66,7 @@ def get_shape(torch_node):
 def import_graph(hl_graph, model, args, input_names=None, verbose=False):
     # TODO: add input names to graph
 
-    # Run the Pytorch graph to get a trace and generate a graph from it
-    trace, out = torch.jit.get_trace_graph(model, args)
-    torch.onnx._optimize_trace(trace, torch.onnx.OperatorExportTypes.ONNX)
-    torch_graph = trace.graph()
-    
+    # Run the Pytorch graph to get a trace and generate a graph from it    
     # Adapted from distiller SummaryGraph
     with torch.onnx.set_training(model, False):
 
